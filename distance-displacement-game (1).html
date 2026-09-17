@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>As the Crow Flies — Distance vs. Displacement</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Firebase (Realtime Database) — same project as your other games -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+  :root{
+    --bg-outer:#241c14;
+    --paper:#f1e6cd;
+    --paper-dark:#e4d3ab;
+    --ink:#241c14;
+    --ink-soft:#4a3f2f;
+    --rust:#a8412a;
+    --rust-dark:#7c2f1e;
+    --forest:#3a5c42;
+    --gold:#b8862f;
+    --line:#c9b489;
+    --good:#3a5c42;
+    --bad:#a8412a;
+    --shadow-hard: 4px 4px 0 rgba(36,28,20,0.35);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(circle at 20% 15%, rgba(184,134,47,0.10), transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(58,92,66,0.14), transparent 45%),
+      repeating-radial-gradient(circle at 50% 50%, rgba(241,230,205,0.035) 0, rgba(241,230,205,0.035) 2px, transparent 2px, transparent 34px),
+      var(--bg-outer);
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:28px 14px 60px;
+  }
+
+  #app{
+    width:100%;
+    max-width:760px;
+  }
+
+  .journal{
+    position:relative;
+    background:var(--paper);
+    border:2px solid var(--ink);
+    box-shadow: var(--shadow-hard), 0 0 0 6px var(--paper-dark) inset;
+    border-radius:6px;
+    padding:34px 30px 30px;
+  }
+
+  .rivet{
+    position:absolute;
+    width:11px;height:11px;
+    border-radius:50%;
+    background:var(--gold);
+    box-shadow:0 0 0 2px var(--ink) inset, 0 1px 1px rgba(0,0,0,0.4);
+  }
+  .rivet.tl{top:10px;left:10px;}
+  .rivet.tr{top:10px;right:10px;}
+  .rivet.bl{bottom:10px;left:10px;}
+  .rivet.br{bottom:10px;right:10px;}
+
+  h1.title{
+    font-family:'Fraunces',serif;
+    font-optical-sizing:auto;
+    font-weight:900;
+    font-size:2.1rem;
+    letter-spacing:-0.01em;
+    color:var(--rust-dark);
+    margin:0 0 2px;
+    line-height:1.05;
+  }
+  p.subtitle{
+    margin:0 0 26px;
+    color:var(--ink-soft);
+    font-size:0.98rem;
+  }
+
+  .screen{display:none;}
+  .screen.active{display:block; animation: fadeIn .35s ease;}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+
+  label{
+    display:block;
+    font-weight:600;
+    font-size:0.92rem;
+    margin-bottom:6px;
+    color:var(--ink-soft);
+  }
+
+  input[type=text], input[type=number]{
+    width:100%;
+    font-family:'Inter',sans-serif;
+    font-size:1.05rem;
+    padding:10px 12px;
+    border:2px solid var(--ink);
+    border-radius:4px;
+    background:#fffdf7;
+    color:var(--ink);
+  }
+  input:focus, select:focus{
+    outline:3px solid var(--gold);
+    outline-offset:1px;
+  }
+
+  select{
+    width:100%;
+    font-family:'Inter',sans-serif;
+    font-size:1.05rem;
+    padding:10px 12px;
+    border:2px solid var(--ink);
+    border-radius:4px;
+    background:#fffdf7;
+    color:var(--ink);
+  }
+
+  .btn{
+    display:inline-block;
+    font-family:'Fraunces',serif;
+    font-weight:700;
+    font-size:1.02rem;
+    padding:12px 22px;
+    border:2px solid var(--ink);
+    border-radius:4px;
+    background:var(--rust);
+    color:#fffaf0;
+    cursor:pointer;
+    box-shadow:3px 3px 0 rgba(36,28,20,0.35);
+    transition:transform .08s ease;
+  }
+  .btn:hover{transform:translate(-1px,-1px);}
+  .btn:active{transform:translate(1px,1px); box-shadow:1px 1px 0 rgba(36,28,20,0.35);}
+  .btn.secondary{background:var(--forest);}
+  .btn.ghost{background:transparent; color:var(--ink); box-shadow:none;}
+  .btn:disabled{opacity:0.45; cursor:not-allowed; transform:none;}
+
+  .field{margin-bottom:18px;}
+
+  .choice-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    margin-top:8px;
+  }
+  @media (max-width:560px){ .choice-row{grid-template-columns:1fr;} }
+
+  .choice-card{
+    border:2px solid var(--ink);
+    border-radius:6px;
+    padding:18px 16px;
+    background:#fffaf0;
+    cursor:pointer;
+    text-align:left;
+  }
+  .choice-card:hover{background:var(--paper-dark);}
+  .choice-card h3{
+    font-family:'Fraunces',serif;
+    margin:0 0 6px;
+    font-size:1.2rem;
+    color:var(--rust-dark);
+  }
+  .choice-card p{margin:0; font-size:0.9rem; color:var(--ink-soft);}
+  .choice-card .badge{
+    display:inline-block;
+    font-size:0.72rem;
+    font-weight:700;
+    letter-spacing:0.02em;
+    color:var(--forest);
+    border:1px solid var(--forest);
+    border-radius:3px;
+    padding:2px 6px;
+    margin-bottom:8px;
+  }
+
+  .topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    margin-bottom:14px;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .topbar .stat{font-size:0.92rem; color:var(--ink-soft);}
+  .topbar .stat b{color:var(--ink);}
+
+  #mapWrap{
+    background:#fffaf0;
+    border:2px solid var(--ink);
+    border-radius:6px;
+    margin-bottom:16px;
+    overflow:hidden;
+  }
+  #mapSvg{display:block; width:100%; height:auto;}
+
+  .leg-log{
+    font-size:1.08rem;
+    color:var(--ink);
+    margin-bottom:18px;
+    line-height:1.6;
+    font-weight:500;
+  }
+  .leg-log b{color:var(--rust-dark); font-weight:700;}
+
+  .answer-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+  }
+  .answer-grid.hardmode{grid-template-columns:1fr 1fr 1fr;}
+  @media (max-width:560px){ .answer-grid, .answer-grid.hardmode{grid-template-columns:1fr;} }
+
+  .hint-note{font-size:0.82rem; color:var(--ink-soft); margin-top:-2px; margin-bottom:14px;}
+
+  #feedback{
+    margin-top:16px;
+    padding:14px 16px;
+    border-radius:6px;
+    border:2px solid var(--ink);
+    display:none;
+    font-size:0.96rem;
+  }
+  #feedback.show{display:block;}
+  #feedback.correct{background:#e4ecd9; border-color:var(--good);}
+  #feedback.wrong{background:#f3ddd4; border-color:var(--bad);}
+  #feedback.shown{background:#f5e6c4; border-color:var(--gold);}
+  #feedback strong{display:block; font-family:'Fraunces',serif; font-size:1.1rem; margin-bottom:4px;}
+
+  .actions-row{display:flex; gap:12px; margin-top:18px; flex-wrap:wrap;}
+
+  table.leaderboard{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:10px;
+    font-size:0.94rem;
+  }
+  table.leaderboard th, table.leaderboard td{
+    text-align:left;
+    padding:8px 10px;
+    border-bottom:1px solid var(--line);
+  }
+  table.leaderboard th{color:var(--ink-soft); font-weight:600; font-size:0.82rem; text-transform:none;}
+  table.leaderboard tr.you{background:var(--paper-dark);}
+
+  .lb-tabs{display:flex; gap:8px; margin:18px 0 4px;}
+  .lb-tab{
+    padding:6px 14px;
+    border:2px solid var(--ink);
+    border-radius:20px;
+    font-size:0.85rem;
+    font-weight:600;
+    cursor:pointer;
+    background:transparent;
+  }
+  .lb-tab.active{background:var(--forest); color:#fff;}
+
+  #bustedOverlay{
+    position:fixed; inset:0; background:#fff;
+    display:none; align-items:center; justify-content:center;
+    z-index:50; text-align:center; padding:20px;
+  }
+  #bustedOverlay.show{display:flex; animation:flash .4s ease;}
+  @keyframes flash{ 0%{background:#fff;} 40%{background:#000;} 100%{background:#fff;} }
+  #bustedOverlay h2{font-family:'Fraunces',serif; color:var(--rust); font-size:1.8rem;}
+
+  .crow{font-size:1.4rem;}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="journal">
+    <div class="rivet tl"></div><div class="rivet tr"></div>
+    <div class="rivet bl"></div><div class="rivet br"></div>
+
+    <h1 class="title">🧭 As the Crow Flies</h1>
+    <p class="subtitle">A field expedition in distance vs. displacement</p>
+
+    <!-- SCREEN 1: INITIALS ENTRY -->
+    <div class="screen active" id="screen-name">
+      <div class="field">
+        <label for="nameInput">Enter your 3 initials, explorer</label>
+        <input type="text" id="nameInput" maxlength="3" placeholder="ABC" value="MRW" autofocus style="text-transform:uppercase; max-width:140px;">
+      </div>
+      <button class="btn" id="btnToDifficulty">Begin Expedition →</button>
+    </div>
+
+    <!-- SCREEN 2: DIFFICULTY SELECT -->
+    <div class="screen" id="screen-difficulty">
+      <p id="greetLine" style="margin-top:-8px; color:var(--ink-soft);"></p>
+      <div class="choice-row">
+        <div class="choice-card" data-diff="easy">
+          <span class="badge">EASY</span>
+          <h3>Trail Walk</h3>
+          <p>A straight boardwalk trail. You'll walk back and forth along one path — figure out how far you walked versus how far you ended up from where you started.</p>
+        </div>
+        <div class="choice-card" data-diff="hard">
+          <span class="badge">HARD</span>
+          <h3>Cross-Country</h3>
+          <p>An open-country route with turns — north, south, east, and west. Track the ground you covered and the straight-line trip a crow would take instead.</p>
+        </div>
+      </div>
+      <p style="font-size:0.85rem; color:var(--ink-soft); margin-top:18px;">
+        💰 <b>Class Cash:</b> Easy earns 0.75 cash per second under 90s (−25% penalty) · Hard earns 1 cash per second under 150s (full rate).
+      </p>
+    </div>
+
+    <!-- SCREEN 3: GAME ROUND -->
+    <div class="screen" id="screen-round">
+      <div class="topbar">
+        <div class="stat">Round <b id="roundNum">1</b> of <b id="roundTotal">5</b></div>
+        <div class="stat"><span id="diffLabel">Trail Walk</span></div>
+        <div class="stat">⏱ <b id="timerDisplay">00:00</b></div>
+      </div>
+
+      <div id="mapWrap">
+        <svg id="mapSvg" viewBox="0 0 700 320" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+
+      <div class="leg-log" id="legLog"></div>
+
+      <div class="answer-grid" id="answerGrid">
+        <div class="field">
+          <label for="inpDistance">Total distance traveled (m)</label>
+          <input type="number" id="inpDistance" step="any" placeholder="e.g. 45">
+        </div>
+        <div class="field" id="dispEasyField">
+          <label for="inpDisplacementEasy">Displacement (m)</label>
+          <input type="number" id="inpDisplacementEasy" step="any" placeholder="+ right, − left">
+        </div>
+        <div class="field" id="dispHardField" style="display:none;">
+          <label for="inpDisplacementHard">Displacement size (m)</label>
+          <input type="number" id="inpDisplacementHard" step="any" placeholder="e.g. 30">
+        </div>
+        <div class="field" id="dirHardField" style="display:none;">
+          <label for="inpDirection">Direction</label>
+          <select id="inpDirection">
+            <option value="">Choose...</option>
+            <option value="N">N</option>
+            <option value="NE">NE</option>
+            <option value="E">E</option>
+            <option value="SE">SE</option>
+            <option value="S">S</option>
+            <option value="SW">SW</option>
+            <option value="W">W</option>
+            <option value="NW">NW</option>
+            <option value="NONE">Back at start (no direction)</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint-note" id="hintNote">For displacement: positive means to the right of where you started, negative means to the left.</p>
+
+      <div id="feedback"></div>
+
+      <div class="actions-row">
+        <button class="btn" id="btnSubmitRound">Check Answer</button>
+        <button class="btn secondary" id="btnNextRound" style="display:none;">Next Round →</button>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: RESULTS -->
+    <div class="screen" id="screen-results">
+      <h2 style="font-family:'Fraunces',serif; color:var(--rust-dark); margin-top:-4px;">🏁 Expedition complete!</h2>
+      <p id="resultsSummary"></p>
+
+      <button class="btn" id="btnSubmitScore">Post My Time</button>
+      <button class="btn ghost" id="btnPlayAgain">Play Again</button>
+
+      <div class="lb-tabs">
+        <button class="lb-tab active" data-lbdiff="easy">Trail Walk Leaderboard</button>
+        <button class="lb-tab" data-lbdiff="hard">Cross-Country Leaderboard</button>
+      </div>
+      <table class="leaderboard">
+        <thead><tr><th>#</th><th>Name</th><th>Time</th></tr></thead>
+        <tbody id="lbBody"><tr><td colspan="3">Loading...</td></tr></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<div id="bustedOverlay">
+  <div>
+    <div style="font-size:3rem;">📸</div>
+    <h2>Caught on camera!</h2>
+    <p>Your IP address and picture are recorded. Try three letters that would look fine on the projector.</p>
+    <button class="btn" id="btnBustedOk">Try Again</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   FIREBASE — same project as your other games (psquare-5025d)
+   Paste your real apiKey / messagingSenderId / appId below,
+   copied straight out of Punnett or Timeline's index.html.
+   ========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCaL4J8MnHl9LsZxn-FR_8eSTm0ILGnxf0",
+  authDomain: "psquare-5025d.firebaseapp.com",
+  databaseURL: "https://psquare-5025d-default-rtdb.firebaseio.com",
+  projectId: "psquare-5025d",
+  storageBucket: "psquare-5025d.firebasestorage.app",
+  messagingSenderId: "857020174119",
+  appId: "1:857020174119:web:8258df64af926d99e16302"
+};
+let db;
+let firebaseReady = false;
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+  firebaseReady = true;
+} catch(e){
+  console.error('Firebase init failed — check firebaseConfig keys.', e);
+  firebaseReady = false;
+}
+const GAME_ID = 'distdisp_lb';
+
+/* =========================================================
+   STORY NAMES + FUNNY PLACES
+   A random roster name "stars" in each round's story text,
+   separate from the player's own initials on the map.
+   ========================================================= */
+const NAME_POOL = [
+  'Zaki','Cyrus','Oliver','David','Kamran','Julien','Alex','Reid','Max','Alex',
+  'Benjamin','Dean','Ari','Cam','Andy','Eric','Immanuel','Masen','Dean','John',
+  'Saahil','William','Rafay','Sam','Wayne','Reid','Jeeva','Dylan','Timmy','Luke',
+  'Will','Stan','Peter','Alden','Jamie','Bode','Viaan','Dilan','James','Alec',
+  'Quentin','Chad','Aditya','Luke','Luke','Drew','Ammar','Joshua','Preston','Sidney',
+  'Henry','Matthew','Lawrence'
+];
+const VERB_BANK = ['sprints','dashes','zooms','races','jogs','scoots','zips','hustles','bolts','wanders'];
+const PLACE_BANK = [
+  // general middle-school silly
+  'the vending machine','the cafeteria line','the lost sock pile','the science lab',
+  'the lunch table','the library corner','the gym bleachers','the lockers',
+  'the bus loop','the water fountain','the lost-and-found bin','the trophy case',
+  // NYC spots, kept middle-school clean
+  'the hot dog cart','the subway turnstile','Central Park','the Statue of Liberty ferry',
+  'Times Square','the Empire State Building lobby','a Yankees game','Coney Island',
+  'a Chinatown dumpling shop','the Brooklyn Bridge walkway','the Museum of Natural History',
+  'a pizza slice shop','the 1 train platform','Rockefeller Center'
+];
+function pickRandomName(){ return NAME_POOL[randInt(0, NAME_POOL.length-1)]; }
+function shuffledPlaces(count){
+  const pool = [...PLACE_BANK];
+  for(let i=pool.length-1;i>0;i--){ const j=randInt(0,i); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  return pool.slice(0, count);
+}
+function shuffledVerbs(count){
+  const pool = [...VERB_BANK];
+  for(let i=pool.length-1;i>0;i--){ const j=randInt(0,i); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  while(pool.length < count) pool.push(...VERB_BANK);
+  return pool.slice(0, count);
+}
+
+/* =========================================================
+   PROFANITY / INAPPROPRIATE INITIALS FILTER
+   ========================================================= */
+const BLOCKED_INITIALS = ['ASS','FAG','FUK','FUC','SEX','GAY','KKK','NIG','RAP','SUX','DIE','HOE','CUM','PUS','TIT','DAM','HEL','GOD','WTF','POO'];
+function isBlocked(str){
+  const s = str.toUpperCase();
+  return BLOCKED_INITIALS.includes(s);
+}
+
+/* =========================================================
+   CAMERA SHUTTER SOUND — synthesized, no audio file needed
+   (same Web Audio API approach as your spaghetti tower app)
+   ========================================================= */
+function playShutterSound(){
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // mechanical click
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = 1400;
+    const clickGain = ctx.createGain();
+    clickGain.gain.setValueAtTime(0.35, ctx.currentTime);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.045);
+    osc.connect(clickGain); clickGain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.05);
+
+    // shutter whoosh — short decaying noise burst
+    const bufferSize = Math.floor(ctx.sampleRate * 0.13);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for(let i=0;i<bufferSize;i++){ data[i] = (Math.random()*2-1) * (1 - i/bufferSize); }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.value = 0.22;
+    noise.connect(noiseGain); noiseGain.connect(ctx.destination);
+    noise.start(ctx.currentTime + 0.03);
+  } catch(e){ console.error('Shutter sound failed to play', e); }
+}
+function showBusted(){
+  playShutterSound();
+  el('bustedOverlay').classList.add('show');
+}
+
+/* =========================================================
+   GAME STATE
+   ========================================================= */
+const ROUND_CONFIG = {
+  easy: [
+    {legs:2, min:5,  max:20},
+    {legs:3, min:5,  max:25},
+    {legs:3, min:10, max:30},
+    {legs:4, min:10, max:35},
+    {legs:4, min:15, max:40},
+  ],
+  hard: [
+    {legs:3, min:10, max:25},
+    {legs:3, min:10, max:30},
+    {legs:4, min:10, max:30},
+    {legs:4, min:15, max:35},
+    {legs:5, min:15, max:40},
+  ]
+};
+
+/* Class Cash — adapted from flagrank's "cash per point under threshold"
+   for a time-based game: cash per second UNDER the threshold time.
+   Tune these two thresholds once you see real student times. */
+const CASH_CONFIG = {
+  easy: { thresholdSec: 90,  rate: 0.75 },  // -25% penalty, same as flagrank Easy
+  hard: { thresholdSec: 150, rate: 1 },     // full rate, same as flagrank Hard
+};
+function computeClassCash(difficulty, elapsedMs){
+  const cfg = CASH_CONFIG[difficulty];
+  const elapsedSec = elapsedMs / 1000;
+  const secUnder = cfg.thresholdSec - elapsedSec;
+  if(secUnder <= 0) return 0;
+  return Math.floor(secUnder * cfg.rate);
+}
+
+let state = {
+  name:'',
+  difficulty:null,
+  roundIndex:0,
+  totalRounds:5,
+  legs:[],          // current round legs
+  answer:{},        // correct answer for current round
+  startTime:null,
+  timerHandle:null,
+  elapsedMs:0,
+  revealed:false,
+};
+
+function el(id){ return document.getElementById(id); }
+el('nameInput').focus();
+el('nameInput').select();
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  el(id).classList.add('active');
+}
+function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function roundTo5(n){ return Math.round(n/5)*5; }
+
+/* =========================================================
+   SCREEN 1 -> 2
+   ========================================================= */
+el('btnToDifficulty').addEventListener('click', ()=>{
+  const val = el('nameInput').value.trim().toUpperCase();
+  if(!/^[A-Z]{3}$/.test(val)){
+    alert('Please enter exactly 3 letters (A-Z).');
+    return;
+  }
+  if(isBlocked(val)){
+    showBusted();
+    return;
+  }
+  state.name = val;
+  el('greetLine').textContent = `Alright, ${state.name} — pick your route:`;
+  showScreen('screen-difficulty');
+});
+
+document.querySelectorAll('.choice-card').forEach(card=>{
+  card.addEventListener('click', ()=>{
+    state.difficulty = card.dataset.diff;
+    startExpedition();
+  });
+});
+
+/* =========================================================
+   START / TIMER
+   ========================================================= */
+function startExpedition(){
+  state.roundIndex = 0;
+  state.elapsedMs = 0;
+  el('diffLabel').textContent = state.difficulty === 'easy' ? 'Trail Walk' : 'Cross-Country';
+  el('roundTotal').textContent = state.totalRounds;
+  startTimer();
+  loadRound();
+  showScreen('screen-round');
+}
+
+function startTimer(){
+  state.startTime = Date.now() - state.elapsedMs;
+  if(state.timerHandle) clearInterval(state.timerHandle);
+  state.timerHandle = setInterval(()=>{
+    state.elapsedMs = Date.now() - state.startTime;
+    el('timerDisplay').textContent = formatTime(state.elapsedMs);
+  }, 250);
+}
+function stopTimer(){ if(state.timerHandle) clearInterval(state.timerHandle); }
+function formatTime(ms){
+  const totalSec = Math.floor(ms/1000);
+  const m = Math.floor(totalSec/60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+/* =========================================================
+   ROUND GENERATION
+   ========================================================= */
+function loadRound(){
+  state.revealed = false;
+  state.attempts = 0;
+  el('roundNum').textContent = state.roundIndex + 1;
+  el('feedback').className = '';
+  el('feedback').textContent = '';
+  el('btnNextRound').style.display = 'none';
+  el('btnSubmitRound').style.display = 'inline-block';
+  el('btnSubmitRound').disabled = false;
+  el('inpDistance').value = '';
+  el('inpDistance').disabled = false;
+
+  if(state.difficulty === 'easy'){
+    el('dispEasyField').style.display = 'block';
+    el('dispHardField').style.display = 'none';
+    el('dirHardField').style.display = 'none';
+    el('inpDisplacementEasy').value = '';
+    el('inpDisplacementEasy').disabled = false;
+    el('hintNote').textContent = 'For displacement: positive means to the right of where you started, negative means to the left.';
+    generateEasyRound();
+  } else {
+    el('dispEasyField').style.display = 'none';
+    el('dispHardField').style.display = 'block';
+    el('dirHardField').style.display = 'block';
+    el('inpDisplacementHard').value = '';
+    el('inpDisplacementHard').disabled = false;
+    el('inpDirection').value = '';
+    el('inpDirection').disabled = false;
+    el('hintNote').textContent = 'Distance is every meter you walked. Displacement is the straight-line trip from start to finish.';
+    generateHardRound();
+  }
+}
+
+function generateEasyRound(){
+  const cfg = ROUND_CONFIG.easy[state.roundIndex];
+  let legs = [];
+  let pos = 0;
+  for(let i=0;i<cfg.legs;i++){
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const mag = roundTo5(randInt(cfg.min, cfg.max));
+    legs.push({dir, mag});
+    pos += dir*mag;
+  }
+  const totalDistance = legs.reduce((a,l)=>a+l.mag,0);
+  const displacement = legs.reduce((a,l)=>a+l.dir*l.mag,0);
+  state.legs = legs;
+  state.storyName = pickRandomName();
+  state.answer = { distance: totalDistance, displacement: displacement };
+  renderEasyMap(legs);
+  renderLegLogEasy(legs, state.storyName);
+}
+
+function generateHardRound(){
+  const cfg = ROUND_CONFIG.hard[state.roundIndex];
+  const dirs = ['N','S','E','W'];
+  let legs = [];
+  let dx=0, dy=0;
+  for(let i=0;i<cfg.legs;i++){
+    const dir = dirs[randInt(0,3)];
+    const mag = roundTo5(randInt(cfg.min, cfg.max));
+    legs.push({dir, mag});
+    if(dir==='N') dy += mag;
+    if(dir==='S') dy -= mag;
+    if(dir==='E') dx += mag;
+    if(dir==='W') dx -= mag;
+  }
+  // corrective leg so the net direction is always a clean compass letter
+  if(dx!==0 && dy!==0 && Math.abs(dx) !== Math.abs(dy)){
+    if(Math.abs(dy) < Math.abs(dx)){
+      const dir = dy>0 ? 'S' : 'N';
+      legs.push({dir, mag: Math.abs(dy)});
+      dy = 0;
+    } else {
+      const dir = dx>0 ? 'W' : 'E';
+      legs.push({dir, mag: Math.abs(dx)});
+      dx = 0;
+    }
+  }
+  const totalDistance = legs.reduce((a,l)=>a+l.mag,0);
+  let dirLabel, mag;
+  if(dx===0 && dy===0){ dirLabel='NONE'; mag=0; }
+  else if(dx===0){ dirLabel = dy>0?'N':'S'; mag = Math.abs(dy); }
+  else { dirLabel = dx>0?'E':'W'; mag = Math.abs(dx); }
+
+  state.legs = legs;
+  state.storyName = pickRandomName();
+  state.answer = { distance: totalDistance, displacement: mag, direction: dirLabel };
+  renderHardMap(legs);
+  renderLegLogHard(legs, state.storyName);
+}
+
+function renderLegLogEasy(legs, name){
+  const places = shuffledPlaces(legs.length);
+  const verbs = shuffledVerbs(legs.length);
+  const lines = legs.map((l,i)=>{
+    const dirWord = l.dir>0 ? 'right' : 'left';
+    return `<b>Leg ${i+1}:</b> ${name} ${verbs[i]} ${l.mag} m ${dirWord}, toward ${places[i]}.`;
+  });
+  el('legLog').innerHTML = `<div style="margin-bottom:8px;">Follow <b>${name}</b> on today's trail:</div>` + lines.join('<br>');
+}
+function renderLegLogHard(legs, name){
+  const compassWord = {N:'north',S:'south',E:'east',W:'west'};
+  const places = shuffledPlaces(legs.length);
+  const verbs = shuffledVerbs(legs.length);
+  const lines = legs.map((l,i)=>`<b>Leg ${i+1}:</b> ${name} ${verbs[i]} ${l.mag} m ${compassWord[l.dir]}, toward ${places[i]}.`);
+  el('legLog').innerHTML = `<div style="margin-bottom:8px;">Follow <b>${name}</b> on today's route:</div>` + lines.join('<br>');
+}
+
+/* =========================================================
+   SVG MAP RENDERING — EASY (1D number line)
+   ========================================================= */
+function renderEasyMap(legs){
+  const svg = el('mapSvg');
+  svg.setAttribute('viewBox','0 0 700 480');
+  let ns = 'http://www.w3.org/2000/svg';
+  svg.innerHTML = '';
+
+  // compute path of positions
+  let pos = 0;
+  let positions = [0];
+  legs.forEach(l=>{ pos += l.dir*l.mag; positions.push(pos); });
+  const minPos = Math.min(...positions, 0);
+  const maxPos = Math.max(...positions, 0);
+  const span = Math.max(maxPos - minPos, 20);
+  const padding = 60;
+  const usableW = 700 - padding*2;
+  const scale = usableW / span;
+  const toX = p => padding + (p - minPos) * scale;
+  const baseY = 220;
+
+  function line(x1,y1,x2,y2,stroke,width,dash){
+    const l = document.createElementNS(ns,'line');
+    l.setAttribute('x1',x1); l.setAttribute('y1',y1);
+    l.setAttribute('x2',x2); l.setAttribute('y2',y2);
+    l.setAttribute('stroke',stroke); l.setAttribute('stroke-width',width);
+    if(dash) l.setAttribute('stroke-dasharray',dash);
+    l.setAttribute('stroke-linecap','round');
+    svg.appendChild(l);
+    return l;
+  }
+  function text(x,y,str,size,color,anchor,weight){
+    const t = document.createElementNS(ns,'text');
+    t.setAttribute('x',x); t.setAttribute('y',y);
+    t.setAttribute('font-size',size||13);
+    t.setAttribute('fill',color||'#4a3f2f');
+    t.setAttribute('text-anchor',anchor||'middle');
+    t.setAttribute('font-family','Inter, sans-serif');
+    if(weight) t.setAttribute('font-weight', weight);
+    t.textContent = str;
+    svg.appendChild(t);
+    return t;
+  }
+
+  // baseline
+  line(padding-20, baseY, 700-padding+20, baseY, '#c9b489', 3);
+
+  // legs as arcs above/below baseline
+  let cur = 0;
+  let trailGeom = [];
+  legs.forEach((l,i)=>{
+    const from = cur, to = cur + l.dir*l.mag;
+    cur = to;
+    const x1 = toX(from), x2 = toX(to);
+    const bump = (i%2===0 ? -1 : 1) * (48 + i*28);
+    const midX = (x1+x2)/2;
+    const path = document.createElementNS(ns,'path');
+    path.setAttribute('d', `M ${x1} ${baseY} Q ${midX} ${baseY+bump} ${x2} ${baseY}`);
+    path.setAttribute('fill','none');
+    path.setAttribute('stroke', '#3a5c42');
+    path.setAttribute('stroke-width', 3);
+    path.setAttribute('marker-end','url(#arrowGreen)');
+    svg.appendChild(path);
+    text(midX, baseY+bump*0.65, `${l.mag} m`, 12.5, '#3a5c42');
+    trailGeom.push({x1, y1:baseY, cx:midX, cy:baseY+bump, x2, y2:baseY, mag:l.mag});
+  });
+  state.trailGeomEasy = trailGeom;
+
+  // how far the tallest arc reaches above / below the baseline this round
+  const maxAbove = Math.max(0, ...trailGeom.map(g => baseY - g.cy)); // arcs curving up
+  const maxBelow = Math.max(0, ...trailGeom.map(g => g.cy - baseY)); // arcs curving down
+  const startClear = Math.max(34, maxBelow + 30);   // START sits below baseline
+  const finishClear = Math.max(20, maxAbove + 26);  // FINISH sits above baseline
+
+  // arrow marker defs
+  const defs = document.createElementNS(ns,'defs');
+  defs.innerHTML = `
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#3a5c42"/>
+    </marker>
+    <marker id="arrowRust" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#a8412a"/>
+    </marker>`;
+  svg.insertBefore(defs, svg.firstChild);
+
+  // start / end markers
+  const startX = toX(0);
+  const startDot = document.createElementNS(ns,'circle');
+  startDot.setAttribute('cx', startX); startDot.setAttribute('cy', baseY);
+  startDot.setAttribute('r', 7); startDot.setAttribute('fill', '#3a5c42');
+  startDot.setAttribute('stroke', '#241c14'); startDot.setAttribute('stroke-width', 1.5);
+  svg.appendChild(startDot);
+  text(startX, baseY+startClear, '🚩', 20, '#241c14');
+  text(startX, baseY+startClear+24, 'START', 15, '#3a5c42', 'middle', 800);
+  text(startX, baseY+startClear+42, state.name, 12.5, '#4a3f2f');
+
+  const endX = toX(positions[positions.length-1]);
+  svg.dataset.startX = startX;
+  svg.dataset.endX = endX;
+  svg.dataset.baseY = baseY;
+
+  const endDot = document.createElementNS(ns,'circle');
+  endDot.setAttribute('cx', endX); endDot.setAttribute('cy', baseY);
+  endDot.setAttribute('r', 7); endDot.setAttribute('fill', '#a8412a');
+  endDot.setAttribute('stroke', '#241c14'); endDot.setAttribute('stroke-width', 1.5);
+  svg.appendChild(endDot);
+  text(endX, baseY-finishClear, '🏁', 20, '#241c14');
+  text(endX, baseY-finishClear-20, 'FINISH', 15, '#a8412a', 'middle', 800);
+}
+
+/* =========================================================
+   SVG MAP RENDERING — HARD (2D grid)
+   ========================================================= */
+function renderHardMap(legs){
+  const svg = el('mapSvg');
+  svg.setAttribute('viewBox','0 0 700 500');
+  let ns = 'http://www.w3.org/2000/svg';
+  svg.innerHTML = '';
+
+  // compute points (screen space: x=east, y=north but SVG y grows downward so flip)
+  let x=0,y=0;
+  let points = [{x:0,y:0}];
+  legs.forEach(l=>{
+    if(l.dir==='N') y += l.mag;
+    if(l.dir==='S') y -= l.mag;
+    if(l.dir==='E') x += l.mag;
+    if(l.dir==='W') x -= l.mag;
+    points.push({x,y});
+  });
+  const xs = points.map(p=>p.x), ys = points.map(p=>p.y);
+  const minX=Math.min(...xs,0), maxX=Math.max(...xs,0);
+  const minY=Math.min(...ys,0), maxY=Math.max(...ys,0);
+  const spanX = Math.max(maxX-minX, 20), spanY = Math.max(maxY-minY,20);
+  const padding = 80;
+  const scale = Math.min((700-padding*2)/spanX, (500-padding*2)/spanY);
+  const toSX = px => padding + (px - minX)*scale;
+  const toSY = py => (500-padding) - (py - minY)*scale; // flip so north is up
+
+  const defs = document.createElementNS(ns,'defs');
+  defs.innerHTML = `
+    <marker id="arrowGreen2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#3a5c42"/>
+    </marker>
+    <marker id="arrowRust2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#a8412a"/>
+    </marker>`;
+  svg.appendChild(defs);
+
+  function text(sx,sy,str,size,color,anchor,weight){
+    const t = document.createElementNS(ns,'text');
+    t.setAttribute('x',sx); t.setAttribute('y',sy);
+    t.setAttribute('font-size',size||12.5);
+    t.setAttribute('fill',color||'#4a3f2f');
+    t.setAttribute('text-anchor',anchor||'middle');
+    t.setAttribute('font-family','Inter, sans-serif');
+    if(weight) t.setAttribute('font-weight', weight);
+    t.textContent = str;
+    svg.appendChild(t);
+  }
+
+  // light grid
+  for(let gx=Math.floor(minX/10)*10; gx<=maxX+10; gx+=10){
+    const sx = toSX(gx);
+    const l = document.createElementNS(ns,'line');
+    l.setAttribute('x1',sx); l.setAttribute('y1',toSY(minY-10));
+    l.setAttribute('x2',sx); l.setAttribute('y2',toSY(maxY+10));
+    l.setAttribute('stroke','#e4d3ab'); l.setAttribute('stroke-width',1);
+    svg.appendChild(l);
+  }
+  for(let gy=Math.floor(minY/10)*10; gy<=maxY+10; gy+=10){
+    const sy = toSY(gy);
+    const l = document.createElementNS(ns,'line');
+    l.setAttribute('x1',toSX(minX-10)); l.setAttribute('y1',sy);
+    l.setAttribute('x2',toSX(maxX+10)); l.setAttribute('y2',sy);
+    l.setAttribute('stroke','#e4d3ab'); l.setAttribute('stroke-width',1);
+    svg.appendChild(l);
+  }
+
+  // trail path
+  let cur = points[0];
+  let screenPoints = [{x:toSX(points[0].x), y:toSY(points[0].y)}];
+  legs.forEach((l,i)=>{
+    const next = points[i+1];
+    const x1=toSX(cur.x), y1=toSY(cur.y), x2=toSX(next.x), y2=toSY(next.y);
+    screenPoints.push({x:x2, y:y2});
+    const line = document.createElementNS(ns,'line');
+    line.setAttribute('x1',x1); line.setAttribute('y1',y1);
+    line.setAttribute('x2',x2); line.setAttribute('y2',y2);
+    line.setAttribute('stroke','#3a5c42'); line.setAttribute('stroke-width',3.5);
+    line.setAttribute('marker-end','url(#arrowGreen2)');
+    svg.appendChild(line);
+    text((x1+x2)/2, (y1+y2)/2 - 8, `${l.mag} m ${l.dir}`, 12, '#2e4a35');
+    cur = next;
+  });
+  state.trailGeomHard = { points: screenPoints, mags: legs.map(l=>l.mag) };
+
+  // start / end
+  const s = points[0], e = points[points.length-1];
+  const startDot = document.createElementNS(ns,'circle');
+  startDot.setAttribute('cx', toSX(s.x)); startDot.setAttribute('cy', toSY(s.y));
+  startDot.setAttribute('r', 7); startDot.setAttribute('fill', '#3a5c42');
+  startDot.setAttribute('stroke', '#241c14'); startDot.setAttribute('stroke-width', 1.5);
+  svg.appendChild(startDot);
+  text(toSX(s.x), toSY(s.y)+26, '🚩', 20, '#241c14');
+  text(toSX(s.x), toSY(s.y)+48, 'START', 15, '#3a5c42', 'middle', 800);
+  text(toSX(s.x), toSY(s.y)+65, state.name, 12.5, '#4a3f2f');
+
+  const endDot = document.createElementNS(ns,'circle');
+  endDot.setAttribute('cx', toSX(e.x)); endDot.setAttribute('cy', toSY(e.y));
+  endDot.setAttribute('r', 7); endDot.setAttribute('fill', '#a8412a');
+  endDot.setAttribute('stroke', '#241c14'); endDot.setAttribute('stroke-width', 1.5);
+  svg.appendChild(endDot);
+  text(toSX(e.x), toSY(e.y)-22, '🏁', 20, '#241c14');
+  text(toSX(e.x), toSY(e.y)-42, 'FINISH', 15, '#a8412a', 'middle', 800);
+
+  svg.dataset.sx = toSX(s.x); svg.dataset.sy = toSY(s.y);
+  svg.dataset.ex = toSX(e.x); svg.dataset.ey = toSY(e.y);
+}
+
+/* =========================================================
+   REVEAL — pigeon flies the whole trail, then the
+   straight "as the crow flies" line draws in after
+   ========================================================= */
+function pointOnQuadratic(p0,p1,p2,t){
+  const mt = 1-t;
+  return {
+    x: mt*mt*p0.x + 2*mt*t*p1.x + t*t*p2.x,
+    y: mt*mt*p0.y + 2*mt*t*p1.y + t*t*p2.y
+  };
+}
+function buildTrailWaypointFn(){
+  if(state.difficulty === 'easy'){
+    const geom = state.trailGeomEasy;
+    const total = geom.reduce((a,l)=>a+l.mag,0);
+    return function(t){
+      let target = t*total, acc=0;
+      for(let i=0;i<geom.length;i++){
+        const leg = geom[i];
+        if(target <= acc+leg.mag || i===geom.length-1){
+          const localT = Math.max(0, Math.min(1, (target-acc)/leg.mag));
+          return pointOnQuadratic({x:leg.x1,y:leg.y1},{x:leg.cx,y:leg.cy},{x:leg.x2,y:leg.y2}, localT);
+        }
+        acc += leg.mag;
+      }
+    };
+  } else {
+    const { points, mags } = state.trailGeomHard;
+    const total = mags.reduce((a,m)=>a+m,0);
+    return function(t){
+      let target = t*total, acc=0;
+      for(let i=0;i<mags.length;i++){
+        if(target <= acc+mags[i] || i===mags.length-1){
+          const localT = Math.max(0, Math.min(1, (target-acc)/mags[i]));
+          const p1=points[i], p2=points[i+1];
+          return { x: p1.x+(p2.x-p1.x)*localT, y: p1.y+(p2.y-p1.y)*localT };
+        }
+        acc += mags[i];
+      }
+    };
+  }
+}
+function flyBirdAlong(getPoint, durationMs, birdEl, onDone){
+  const t0 = performance.now();
+  function frame(now){
+    const t = Math.min(1, (now-t0)/durationMs);
+    const p = getPoint(t);
+    birdEl.setAttribute('x', p.x);
+    birdEl.setAttribute('y', p.y - 12);
+    if(t < 1){ requestAnimationFrame(frame); }
+    else if(onDone){ onDone(); }
+  }
+  requestAnimationFrame(frame);
+}
+
+function revealCrowLine(){
+  if(state.revealed) return;
+  state.revealed = true;
+  const svg = el('mapSvg');
+  const ns = 'http://www.w3.org/2000/svg';
+
+  let x1,y1,x2,y2;
+  if(state.difficulty === 'easy'){
+    x1 = parseFloat(svg.dataset.startX); y1 = parseFloat(svg.dataset.baseY);
+    x2 = parseFloat(svg.dataset.endX);   y2 = y1;
+  } else {
+    x1 = parseFloat(svg.dataset.sx); y1 = parseFloat(svg.dataset.sy);
+    x2 = parseFloat(svg.dataset.ex); y2 = parseFloat(svg.dataset.ey);
+  }
+
+  // stage 1: the pigeon actually flies the whole winding trail (the real distance)
+  const pigeon = document.createElementNS(ns,'text');
+  pigeon.setAttribute('font-size',20);
+  pigeon.textContent = '🐦';
+  svg.appendChild(pigeon);
+
+  const waypointFn = buildTrailWaypointFn();
+  const totalDist = state.answer.distance;
+  const trailDuration = Math.max(1100, Math.min(3200, totalDist * 28));
+
+  flyBirdAlong(waypointFn, trailDuration, pigeon, ()=>{
+    pigeon.remove();
+
+    // stage 2: as the crow flies — the straight-line displacement
+    const dash = document.createElementNS(ns,'line');
+    dash.setAttribute('x1',x1); dash.setAttribute('y1',y1);
+    dash.setAttribute('x2',x2); dash.setAttribute('y2',y2);
+    dash.setAttribute('stroke','#a8412a'); dash.setAttribute('stroke-width',2.5);
+    dash.setAttribute('stroke-dasharray','7 6');
+    dash.setAttribute('marker-end','url(#arrowRust)');
+    svg.appendChild(dash);
+
+    const crow = document.createElementNS(ns,'text');
+    crow.setAttribute('x',x1); crow.setAttribute('y',y1-10);
+    crow.setAttribute('font-size',18);
+    crow.textContent = '🐦‍⬛';
+    svg.appendChild(crow);
+    crow.animate?.([
+      {transform:`translate(0px,0px)`},
+      {transform:`translate(${x2-x1}px,${y2-y1}px)`}
+    ], {duration:800, easing:'ease-in-out', fill:'forwards'});
+  });
+}
+
+/* =========================================================
+   ANSWER CHECKING
+   ========================================================= */
+el('btnSubmitRound').addEventListener('click', checkRound);
+
+// Enter key = click the relevant button, wherever focus is in that step
+function bindEnterToClick(inputEls, buttonEl){
+  inputEls.forEach(input=>{
+    input.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        buttonEl.click();
+      }
+    });
+  });
+}
+bindEnterToClick([el('nameInput')], el('btnToDifficulty'));
+
+function handleRoundEnter(e){
+  if(e.key !== 'Enter') return;
+  if(!el('screen-round').classList.contains('active')) return;
+  e.preventDefault();
+  if(el('btnNextRound').style.display !== 'none'){
+    el('btnNextRound').click();
+  } else if(!el('btnSubmitRound').disabled){
+    el('btnSubmitRound').click();
+  }
+}
+document.addEventListener('keydown', handleRoundEnter);
+
+function checkRound(){
+  if(el('btnSubmitRound').disabled) return;
+
+  const distanceIn = parseFloat(el('inpDistance').value);
+  const distanceWrong = isNaN(distanceIn) || Math.abs(distanceIn - state.answer.distance) > 0.01;
+
+  let displacementWrong, directionWrong = false;
+  if(state.difficulty === 'easy'){
+    const dispIn = parseFloat(el('inpDisplacementEasy').value);
+    displacementWrong = isNaN(dispIn) || Math.abs(dispIn - state.answer.displacement) > 0.01;
+  } else {
+    const dispIn = parseFloat(el('inpDisplacementHard').value);
+    const dirIn = el('inpDirection').value;
+    const magOk = !isNaN(dispIn) && Math.abs(dispIn - state.answer.displacement) < 0.01;
+    let dirOk;
+    if(state.answer.direction === 'NONE'){
+      dirOk = (dirIn === 'NONE') || (magOk && dispIn === 0);
+    } else {
+      dirOk = dirIn === state.answer.direction;
+    }
+    displacementWrong = !magOk;
+    directionWrong = !dirOk;
+  }
+
+  const correct = !distanceWrong && !displacementWrong && !directionWrong;
+  const fb = el('feedback');
+  fb.className = 'show';
+
+  if(correct){
+    fb.classList.add('correct');
+    fb.innerHTML = `<strong>Correct!</strong> Distance: ${state.answer.distance} m. Displacement: ${
+      state.difficulty==='easy'
+        ? state.answer.displacement + ' m'
+        : (state.answer.direction==='NONE' ? '0 m (back at start)' : state.answer.displacement + ' m ' + state.answer.direction)
+    }.`;
+    revealCrowLine();
+    el('btnSubmitRound').style.display='none';
+    el('btnNextRound').style.display='inline-block';
+    lockInputs(true);
+    return;
+  }
+
+  state.attempts++;
+  fb.classList.remove('correct');
+
+  if(state.attempts >= 4){
+    // full reveal — explain it and hand them the answer so they can move on
+    fb.classList.remove('wrong');
+    fb.classList.add('shown');
+    const dispAnswerText = state.difficulty==='easy'
+      ? `${state.answer.displacement} m`
+      : (state.answer.direction==='NONE' ? '0 m (back at start)' : `${state.answer.displacement} m ${state.answer.direction}`);
+    fb.innerHTML = `<strong>Here's how it breaks down:</strong> Total distance is every meter walked, added up regardless of direction — that's <b>${state.answer.distance} m</b>. Displacement is the straight-line trip from start to finish — that's <b>${dispAnswerText}</b>. Take a look, then move on to the next round.`;
+    revealCrowLine();
+    el('btnSubmitRound').style.display = 'none';
+    el('btnNextRound').style.display = 'inline-block';
+    lockInputs(true);
+  } else if(state.attempts >= 2){
+    fb.classList.add('wrong');
+    const offParts = [];
+    if(distanceWrong) offParts.push('total distance');
+    if(displacementWrong) offParts.push('displacement size');
+    if(directionWrong) offParts.push('direction');
+    fb.innerHTML = `<strong>Getting closer?</strong> Double-check your <b>${offParts.join(' and ')}</b> — that's what's off. Distance is every step added up; displacement is the straight-line trip from start to finish.`;
+  } else {
+    fb.classList.add('wrong');
+    fb.innerHTML = `<strong>Not quite yet.</strong> Check your total distance and your displacement again — displacement is the straight-line trip from start to finish, distance is every step you took. Try again!`;
+  }
+}
+
+function lockInputs(lock){
+  el('inpDistance').disabled = lock;
+  el('inpDisplacementEasy').disabled = lock;
+  el('inpDisplacementHard').disabled = lock;
+  el('inpDirection').disabled = lock;
+}
+
+el('btnNextRound').addEventListener('click', ()=>{
+  state.roundIndex++;
+  if(state.roundIndex >= state.totalRounds){
+    finishExpedition();
+  } else {
+    loadRound();
+  }
+});
+
+/* =========================================================
+   FINISH + LEADERBOARD
+   ========================================================= */
+function finishExpedition(){
+  stopTimer();
+  showScreen('screen-results');
+  const cash = computeClassCash(state.difficulty, state.elapsedMs);
+  const cfg = CASH_CONFIG[state.difficulty];
+  el('resultsSummary').innerHTML = `${state.name}, you completed the ${state.difficulty==='easy'?'Trail Walk':'Cross-Country'} route in ${formatTime(state.elapsedMs)}.<br>` +
+    (cash > 0
+      ? `💰 <b>You earned ${cash} Class Cash!</b> <span style="color:var(--ink-soft); font-size:0.85rem;">(${cfg.rate} cash/sec under ${cfg.thresholdSec}s${state.difficulty==='easy' ? ', -25% penalty' : ', full rate'})</span>`
+      : `<span style="color:var(--ink-soft); font-size:0.85rem;">No Class Cash this time — finish under ${cfg.thresholdSec}s to start earning.</span>`);
+  el('btnSubmitScore').disabled = false;
+  loadLeaderboard(state.difficulty);
+  document.querySelectorAll('.lb-tab').forEach(tab=>{
+    tab.classList.toggle('active', tab.dataset.lbdiff === state.difficulty);
+  });
+}
+
+el('btnSubmitScore').addEventListener('click', ()=>{
+  if(!firebaseReady){
+    alert('The leaderboard isn\'t connected yet — Mr. Ward needs to add the Firebase keys to this file.');
+    return;
+  }
+  const initials = state.name;
+  if(isBlocked(initials)){
+    showBusted();
+    return;
+  }
+  const entry = { initials, timeMs: state.elapsedMs, ts: Date.now() };
+  db.ref(`${GAME_ID}/${state.difficulty}`).push(entry)
+    .then(()=>{ loadLeaderboard(state.difficulty); el('btnSubmitScore').disabled = true; })
+    .catch(err=>{ console.error(err); alert('Could not save to leaderboard — check your connection.'); });
+});
+
+el('btnBustedOk').addEventListener('click', ()=>{
+  el('bustedOverlay').classList.remove('show');
+  if(el('screen-name').classList.contains('active')){
+    el('nameInput').focus();
+    el('nameInput').select();
+  }
+});
+
+el('btnPlayAgain').addEventListener('click', ()=>{
+  showScreen('screen-difficulty');
+});
+
+document.querySelectorAll('.lb-tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.lb-tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    loadLeaderboard(tab.dataset.lbdiff);
+  });
+});
+
+function loadLeaderboard(diff){
+  if(!firebaseReady){
+    el('lbBody').innerHTML = '<tr><td colspan="3">Leaderboard not connected yet — Mr. Ward needs to add the Firebase keys.</td></tr>';
+    return;
+  }
+  el('lbBody').innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
+  db.ref(`${GAME_ID}/${diff}`).once('value')
+    .then(snap=>{
+      const val = snap.val() || {};
+      const rows = Object.values(val)
+        .sort((a,b)=>a.timeMs - b.timeMs)
+        .slice(0,10);
+      if(rows.length === 0){
+        el('lbBody').innerHTML = '<tr><td colspan="3">No times yet — be the first!</td></tr>';
+        return;
+      }
+      el('lbBody').innerHTML = rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.initials}</td><td>${formatTime(r.timeMs)}</td></tr>`).join('');
+    })
+    .catch(err=>{
+      console.error(err);
+      el('lbBody').innerHTML = '<tr><td colspan="3">Could not load leaderboard.</td></tr>';
+    });
+}
+</script>
+</body>
+</html>
