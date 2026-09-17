@@ -344,6 +344,10 @@
       <p style="font-size:0.85rem; color:var(--ink-soft); margin-top:18px;">
         💰 <b>Class Cash:</b> Easy earns 0.75 cash per second under 90s (−25% penalty) · Hard earns 1 cash per second under 150s (full rate).
       </p>
+      <div style="margin-top:10px;">
+        <button class="btn ghost" id="btnViewScoresDifficulty" style="padding:8px 14px; font-size:0.9rem;">🏆 High Scores</button>
+        <button class="btn ghost" id="btnViewShopDifficulty" style="padding:8px 14px; font-size:0.9rem;">💰 Cash Shop</button>
+      </div>
     </div>
 
     <!-- SCREEN 3: GAME ROUND -->
@@ -404,7 +408,8 @@
       <h2 style="font-family:'Fraunces',serif; color:var(--rust-dark); margin-top:-4px;">🏁 Expedition complete!</h2>
       <p id="resultsSummary"></p>
 
-      <button class="btn" id="btnSubmitScore">Post My Time</button>
+      <p id="postStatus" style="font-size:0.9rem; color:var(--ink-soft);"></p>
+      <button class="btn" id="btnSubmitScore" style="display:none;">Retry Posting</button>
       <button class="btn ghost" id="btnPlayAgain">Play Again</button>
       <button class="btn ghost" id="btnViewShopResults">💰 Cash Shop</button>
 
@@ -1297,28 +1302,41 @@ function finishExpedition(){
       ? `💰 <b>You earned ${cash} Class Cash!</b> <span style="color:var(--ink-soft); font-size:0.85rem;">(${cfg.rate} cash/sec under ${cfg.thresholdSec}s${state.difficulty==='easy' ? ', -25% penalty' : ', full rate'})</span>`
       : `<span style="color:var(--ink-soft); font-size:0.85rem;">No Class Cash this time — finish under ${cfg.thresholdSec}s to start earning.</span>`) +
     `<br><span style="font-size:0.85rem; color:var(--ink-soft);">Total balance: <b>${rec.cash} Class Cash</b> — spend it in the shop.</span>`;
-  el('btnSubmitScore').disabled = false;
   loadLeaderboard(state.difficulty, 'lbBody');
   document.querySelectorAll('#screen-results .lb-tab').forEach(tab=>{
     tab.classList.toggle('active', tab.dataset.lbdiff === state.difficulty);
   });
+  submitScore();
 }
 
-el('btnSubmitScore').addEventListener('click', ()=>{
+function submitScore(){
+  const statusEl = el('postStatus');
+  const retryBtn = el('btnSubmitScore');
+  retryBtn.style.display = 'none';
+
   if(!firebaseReady){
-    alert('The leaderboard isn\'t connected yet — Mr. Ward needs to add the Firebase keys to this file.');
+    statusEl.textContent = "⚠️ Not posted — the leaderboard isn't connected yet.";
     return;
   }
-  const initials = state.name;
-  if(isBlocked(initials)){
-    showBusted();
+  if(isBlocked(state.name)){
+    statusEl.textContent = "Time not posted.";
     return;
   }
-  const entry = { initials, timeMs: state.elapsedMs, ts: Date.now() };
+  statusEl.textContent = 'Posting your time...';
+  const entry = { initials: state.name, timeMs: state.elapsedMs, ts: Date.now() };
   db.ref(`${GAME_ID}/${state.difficulty}`).push(entry)
-    .then(()=>{ loadLeaderboard(state.difficulty); el('btnSubmitScore').disabled = true; })
-    .catch(err=>{ console.error(err); alert('Could not save to leaderboard — check your connection.'); });
-});
+    .then(()=>{
+      statusEl.textContent = '✅ Posted to the leaderboard!';
+      loadLeaderboard(state.difficulty, 'lbBody');
+    })
+    .catch(err=>{
+      console.error(err);
+      statusEl.textContent = '⚠️ Could not post — check your connection.';
+      retryBtn.style.display = 'inline-block';
+    });
+}
+
+el('btnSubmitScore').addEventListener('click', submitScore);
 
 el('btnBustedOk').addEventListener('click', ()=>{
   el('bustedOverlay').classList.remove('show');
@@ -1429,6 +1447,7 @@ el('btnViewScoresFront').addEventListener('click', ()=>{
   const val = requireInitials();
   if(!val) return;
   state.name = val;
+  state.scoresReturnScreen = 'screen-name';
   showScreen('screen-leaderboard-view');
   loadLeaderboard('easy', 'lbViewBody');
 });
@@ -1440,12 +1459,22 @@ el('btnViewShopFront').addEventListener('click', ()=>{
   showScreen('screen-shop');
   renderShop();
 });
+el('btnViewScoresDifficulty').addEventListener('click', ()=>{
+  state.scoresReturnScreen = 'screen-difficulty';
+  showScreen('screen-leaderboard-view');
+  loadLeaderboard('easy', 'lbViewBody');
+});
+el('btnViewShopDifficulty').addEventListener('click', ()=>{
+  state.shopReturnScreen = 'screen-difficulty';
+  showScreen('screen-shop');
+  renderShop();
+});
 el('btnViewShopResults').addEventListener('click', ()=>{
   state.shopReturnScreen = 'screen-results';
   showScreen('screen-shop');
   renderShop();
 });
-el('btnBackFromScores').addEventListener('click', ()=>{ showScreen('screen-name'); });
+el('btnBackFromScores').addEventListener('click', ()=>{ showScreen(state.scoresReturnScreen || 'screen-name'); });
 el('btnBackFromShop').addEventListener('click', ()=>{
   showScreen(state.shopReturnScreen || 'screen-name');
 });
