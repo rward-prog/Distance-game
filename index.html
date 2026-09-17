@@ -186,6 +186,30 @@
     margin-bottom:8px;
   }
 
+  .shop-item{
+    border:2px solid var(--ink);
+    border-radius:6px;
+    padding:14px;
+    background:#fffaf0;
+    text-align:center;
+  }
+  .shop-item .swatch{
+    width:32px; height:32px;
+    border-radius:50%;
+    margin:0 auto 8px;
+    border:2px solid var(--ink);
+  }
+  .shop-item .name{ font-family:'Fraunces',serif; font-weight:700; font-size:0.98rem; margin-bottom:2px; }
+  .shop-item .price{ font-size:0.82rem; color:var(--ink-soft); margin-bottom:10px; }
+  .shop-item button{
+    width:100%; padding:8px; border:2px solid var(--ink); border-radius:4px;
+    font-family:'Inter',sans-serif; font-weight:600; font-size:0.85rem; cursor:pointer;
+  }
+  .shop-item button.owned{ background:var(--paper-dark); }
+  .shop-item button.equipped{ background:var(--forest); color:#fff; cursor:default; }
+  .shop-item button.locked{ background:#eee; color:#999; cursor:not-allowed; }
+  .shop-item button.buyable{ background:var(--gold); color:#fff; }
+
   .topbar{
     display:flex;
     justify-content:space-between;
@@ -296,6 +320,10 @@
         <input type="text" id="nameInput" maxlength="3" placeholder="ABC" value="MRW" autofocus style="text-transform:uppercase; max-width:140px;">
       </div>
       <button class="btn" id="btnToDifficulty">Begin Expedition →</button>
+      <div style="margin-top:14px;">
+        <button class="btn ghost" id="btnViewScoresFront" style="padding:8px 14px; font-size:0.9rem;">🏆 High Scores</button>
+        <button class="btn ghost" id="btnViewShopFront" style="padding:8px 14px; font-size:0.9rem;">💰 Cash Shop</button>
+      </div>
     </div>
 
     <!-- SCREEN 2: DIFFICULTY SELECT -->
@@ -378,6 +406,7 @@
 
       <button class="btn" id="btnSubmitScore">Post My Time</button>
       <button class="btn ghost" id="btnPlayAgain">Play Again</button>
+      <button class="btn ghost" id="btnViewShopResults">💰 Cash Shop</button>
 
       <div class="lb-tabs">
         <button class="lb-tab active" data-lbdiff="easy">Trail Walk Leaderboard</button>
@@ -387,6 +416,29 @@
         <thead><tr><th>#</th><th>Name</th><th>Time</th></tr></thead>
         <tbody id="lbBody"><tr><td colspan="3">Loading...</td></tr></tbody>
       </table>
+    </div>
+
+    <!-- SCREEN 5: STANDALONE LEADERBOARD VIEW (from front page) -->
+    <div class="screen" id="screen-leaderboard-view">
+      <h2 style="font-family:'Fraunces',serif; color:var(--rust-dark); margin-top:-4px;">🏆 High Scores</h2>
+      <div class="lb-tabs">
+        <button class="lb-tab active" data-lbviewdiff="easy">Trail Walk Leaderboard</button>
+        <button class="lb-tab" data-lbviewdiff="hard">Cross-Country Leaderboard</button>
+      </div>
+      <table class="leaderboard">
+        <thead><tr><th>#</th><th>Name</th><th>Time</th></tr></thead>
+        <tbody id="lbViewBody"><tr><td colspan="3">Loading...</td></tr></tbody>
+      </table>
+      <button class="btn ghost" id="btnBackFromScores" style="margin-top:18px;">← Back</button>
+    </div>
+
+    <!-- SCREEN 6: CASH SHOP -->
+    <div class="screen" id="screen-shop">
+      <h2 style="font-family:'Fraunces',serif; color:var(--rust-dark); margin-top:-4px;">💰 Cash Shop</h2>
+      <p id="shopBalanceLine" style="font-weight:600;"></p>
+      <p style="font-size:0.85rem; color:var(--ink-soft); margin-top:-8px;">Buy a color for your name on the leaderboard. Your Class Cash is saved on this computer.</p>
+      <div id="shopGrid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:16px 0;"></div>
+      <button class="btn ghost" id="btnBackFromShop">← Back</button>
     </div>
 
   </div>
@@ -543,6 +595,64 @@ function computeClassCash(difficulty, elapsedMs){
   const secUnder = cfg.thresholdSec - elapsedSec;
   if(secUnder <= 0) return 0;
   return Math.floor(secUnder * cfg.rate);
+}
+
+/* =========================================================
+   CASH SHOP — colors purchasable with Class Cash
+   Balance/ownership saved on THIS computer (localStorage),
+   matching your flagrank/Timeline games. The equipped color
+   itself is also pushed to Firebase so it shows up for
+   everyone viewing the shared leaderboard.
+   ========================================================= */
+const COLOR_CATALOG = [
+  { id:'ink',     name:'Ink Black',        price:0,  hex:'#241c14' },
+  { id:'subway',  name:'Subway Green',      price:15, hex:'#3a5c42' },
+  { id:'taxi',    name:'Taxi Yellow',       price:20, hex:'#d4a017' },
+  { id:'liberty', name:'Liberty Gold',      price:35, hex:'#b8862f' },
+  { id:'copper',  name:'Statue Copper',     price:50, hex:'#8a5a3c' },
+  { id:'navy',    name:'Yankee Navy',       price:65, hex:'#1c2b4a' },
+  { id:'redline', name:'Times Square Red',  price:80, hex:'#a8412a' },
+];
+const CASH_STORAGE_KEY = 'distdisp_cash_v1';
+
+function loadCashData(){
+  try{ return JSON.parse(localStorage.getItem(CASH_STORAGE_KEY) || '{}'); }
+  catch(e){ return {}; }
+}
+function saveCashData(data){
+  try{ localStorage.setItem(CASH_STORAGE_KEY, JSON.stringify(data)); }
+  catch(e){ console.error('Could not save Class Cash locally', e); }
+}
+function getPlayerRecord(initials){
+  const data = loadCashData();
+  if(!data[initials]) data[initials] = { cash:0, owned:['ink'], equipped:'ink' };
+  return data[initials];
+}
+function addCashToPlayer(initials, amount){
+  const data = loadCashData();
+  const rec = data[initials] || { cash:0, owned:['ink'], equipped:'ink' };
+  rec.cash += amount;
+  data[initials] = rec;
+  saveCashData(data);
+  return rec;
+}
+function buyOrEquipColor(initials, colorId){
+  const data = loadCashData();
+  const rec = data[initials] || { cash:0, owned:['ink'], equipped:'ink' };
+  const item = COLOR_CATALOG.find(c=>c.id===colorId);
+  if(!item) return { ok:false };
+  if(!rec.owned.includes(colorId)){
+    if(rec.cash < item.price) return { ok:false, msg:'Not enough Class Cash yet.' };
+    rec.cash -= item.price;
+    rec.owned.push(colorId);
+  }
+  rec.equipped = colorId;
+  data[initials] = rec;
+  saveCashData(data);
+  if(firebaseReady){
+    db.ref(`${GAME_ID}/playerColors/${initials}`).set(item.hex).catch(err=>console.error(err));
+  }
+  return { ok:true, rec };
 }
 
 let state = {
@@ -1181,13 +1291,15 @@ function finishExpedition(){
   showScreen('screen-results');
   const cash = computeClassCash(state.difficulty, state.elapsedMs);
   const cfg = CASH_CONFIG[state.difficulty];
+  const rec = addCashToPlayer(state.name, cash);
   el('resultsSummary').innerHTML = `${state.name}, you completed the ${state.difficulty==='easy'?'Trail Walk':'Cross-Country'} route in ${formatTime(state.elapsedMs)}.<br>` +
     (cash > 0
       ? `💰 <b>You earned ${cash} Class Cash!</b> <span style="color:var(--ink-soft); font-size:0.85rem;">(${cfg.rate} cash/sec under ${cfg.thresholdSec}s${state.difficulty==='easy' ? ', -25% penalty' : ', full rate'})</span>`
-      : `<span style="color:var(--ink-soft); font-size:0.85rem;">No Class Cash this time — finish under ${cfg.thresholdSec}s to start earning.</span>`);
+      : `<span style="color:var(--ink-soft); font-size:0.85rem;">No Class Cash this time — finish under ${cfg.thresholdSec}s to start earning.</span>`) +
+    `<br><span style="font-size:0.85rem; color:var(--ink-soft);">Total balance: <b>${rec.cash} Class Cash</b> — spend it in the shop.</span>`;
   el('btnSubmitScore').disabled = false;
-  loadLeaderboard(state.difficulty);
-  document.querySelectorAll('.lb-tab').forEach(tab=>{
+  loadLeaderboard(state.difficulty, 'lbBody');
+  document.querySelectorAll('#screen-results .lb-tab').forEach(tab=>{
     tab.classList.toggle('active', tab.dataset.lbdiff === state.difficulty);
   });
 }
@@ -1220,37 +1332,123 @@ el('btnPlayAgain').addEventListener('click', ()=>{
   showScreen('screen-difficulty');
 });
 
-document.querySelectorAll('.lb-tab').forEach(tab=>{
+document.querySelectorAll('#screen-results .lb-tab').forEach(tab=>{
   tab.addEventListener('click', ()=>{
-    document.querySelectorAll('.lb-tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('#screen-results .lb-tab').forEach(t=>t.classList.remove('active'));
     tab.classList.add('active');
-    loadLeaderboard(tab.dataset.lbdiff);
+    loadLeaderboard(tab.dataset.lbdiff, 'lbBody');
   });
 });
 
-function loadLeaderboard(diff){
+document.querySelectorAll('#screen-leaderboard-view .lb-tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('#screen-leaderboard-view .lb-tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    loadLeaderboard(tab.dataset.lbviewdiff, 'lbViewBody');
+  });
+});
+
+function loadLeaderboard(diff, targetId){
+  const body = el(targetId);
   if(!firebaseReady){
-    el('lbBody').innerHTML = '<tr><td colspan="3">Leaderboard not connected yet — Mr. Ward needs to add the Firebase keys.</td></tr>';
+    body.innerHTML = '<tr><td colspan="3">Leaderboard not connected yet — Mr. Ward needs to add the Firebase keys.</td></tr>';
     return;
   }
-  el('lbBody').innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
-  db.ref(`${GAME_ID}/${diff}`).once('value')
-    .then(snap=>{
+  body.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
+  Promise.all([
+    db.ref(`${GAME_ID}/${diff}`).once('value'),
+    db.ref(`${GAME_ID}/playerColors`).once('value')
+  ])
+    .then(([snap, colorSnap])=>{
       const val = snap.val() || {};
+      const colors = colorSnap.val() || {};
       const rows = Object.values(val)
         .sort((a,b)=>a.timeMs - b.timeMs)
         .slice(0,10);
       if(rows.length === 0){
-        el('lbBody').innerHTML = '<tr><td colspan="3">No times yet — be the first!</td></tr>';
+        body.innerHTML = '<tr><td colspan="3">No times yet — be the first!</td></tr>';
         return;
       }
-      el('lbBody').innerHTML = rows.map((r,i)=>`<tr><td>${i+1}</td><td>${r.initials}</td><td>${formatTime(r.timeMs)}</td></tr>`).join('');
+      body.innerHTML = rows.map((r,i)=>{
+        const hex = colors[r.initials];
+        const style = hex ? ` style="color:${hex}; font-weight:700;"` : '';
+        return `<tr><td>${i+1}</td><td${style}>${r.initials}</td><td>${formatTime(r.timeMs)}</td></tr>`;
+      }).join('');
     })
     .catch(err=>{
       console.error(err);
-      el('lbBody').innerHTML = '<tr><td colspan="3">Could not load leaderboard.</td></tr>';
+      body.innerHTML = '<tr><td colspan="3">Could not load leaderboard.</td></tr>';
     });
 }
+
+/* =========================================================
+   SHOP SCREEN + NAV BUTTONS
+   ========================================================= */
+function renderShop(){
+  const rec = getPlayerRecord(state.name);
+  el('shopBalanceLine').textContent = `${state.name}'s balance: ${rec.cash} Class Cash`;
+  el('shopGrid').innerHTML = COLOR_CATALOG.map(item=>{
+    const owned = rec.owned.includes(item.id);
+    const equipped = rec.equipped === item.id;
+    let btnClass, btnLabel;
+    if(equipped){ btnClass='equipped'; btnLabel='Equipped ✓'; }
+    else if(owned){ btnClass='owned'; btnLabel='Equip'; }
+    else if(rec.cash >= item.price){ btnClass='buyable'; btnLabel=`Buy — ${item.price}`; }
+    else { btnClass='locked'; btnLabel=`Need ${item.price}`; }
+    return `
+      <div class="shop-item">
+        <div class="swatch" style="background:${item.hex};"></div>
+        <div class="name">${item.name}</div>
+        <div class="price">${item.price === 0 ? 'Free' : item.price + ' Class Cash'}</div>
+        <button class="${btnClass}" data-colorid="${item.id}" ${btnClass==='locked'||btnClass==='equipped' ? 'disabled':''}>${btnLabel}</button>
+      </div>`;
+  }).join('');
+  el('shopGrid').querySelectorAll('button[data-colorid]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const result = buyOrEquipColor(state.name, btn.dataset.colorid);
+      if(!result.ok){ alert(result.msg || 'Could not update your color.'); }
+      renderShop();
+    });
+  });
+}
+
+function requireInitials(){
+  const val = el('nameInput').value.trim().toUpperCase();
+  if(!/^[A-Z]{3}$/.test(val)){
+    alert('Enter your 3 initials first (A-Z).');
+    return null;
+  }
+  if(isBlocked(val)){
+    showBusted();
+    return null;
+  }
+  return val;
+}
+
+el('btnViewScoresFront').addEventListener('click', ()=>{
+  const val = requireInitials();
+  if(!val) return;
+  state.name = val;
+  showScreen('screen-leaderboard-view');
+  loadLeaderboard('easy', 'lbViewBody');
+});
+el('btnViewShopFront').addEventListener('click', ()=>{
+  const val = requireInitials();
+  if(!val) return;
+  state.name = val;
+  state.shopReturnScreen = 'screen-name';
+  showScreen('screen-shop');
+  renderShop();
+});
+el('btnViewShopResults').addEventListener('click', ()=>{
+  state.shopReturnScreen = 'screen-results';
+  showScreen('screen-shop');
+  renderShop();
+});
+el('btnBackFromScores').addEventListener('click', ()=>{ showScreen('screen-name'); });
+el('btnBackFromShop').addEventListener('click', ()=>{
+  showScreen(state.shopReturnScreen || 'screen-name');
+});
 </script>
 </body>
 </html>
