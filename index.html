@@ -1205,6 +1205,24 @@ document.addEventListener('keydown', handleRoundEnter);
 function checkRound(){
   if(el('btnSubmitRound').disabled) return;
 
+  // require an actual answer in every box before this counts as an attempt —
+  // closes the "spam Enter with nothing typed" exploit
+  const distanceRaw = el('inpDistance').value.trim();
+  let fieldsFilled = distanceRaw !== '';
+  if(state.difficulty === 'easy'){
+    fieldsFilled = fieldsFilled && el('inpDisplacementEasy').value.trim() !== '';
+  } else {
+    fieldsFilled = fieldsFilled
+      && el('inpDisplacementHard').value.trim() !== ''
+      && el('inpDirection').value !== '';
+  }
+  if(!fieldsFilled){
+    const fb = el('feedback');
+    fb.className = 'show wrong';
+    fb.innerHTML = `<strong>Fill in every box first.</strong> Enter your distance${state.difficulty==='easy' ? ' and displacement' : ', displacement, and direction'} before checking.`;
+    return;
+  }
+
   const distanceIn = parseFloat(el('inpDistance').value);
   const distanceWrong = isNaN(distanceIn) || Math.abs(distanceIn - state.answer.distance) > 0.01;
 
