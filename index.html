@@ -1008,6 +1008,23 @@ function renderHardMap(legs){
     t.textContent = str;
     svg.appendChild(t);
   }
+  // text with a small paper backing so it stays readable over grid lines / crossing paths
+  function labelWithBg(sx,sy,str,size,color,anchor,weight){
+    const s = size||12.5;
+    const approxW = str.length * s * 0.58 + 10;
+    const approxH = s + 8;
+    const rect = document.createElementNS(ns,'rect');
+    const rx = anchor==='start' ? sx-4 : (anchor==='end' ? sx-approxW+4 : sx-approxW/2);
+    rect.setAttribute('x', rx);
+    rect.setAttribute('y', sy - s*0.78 - 3);
+    rect.setAttribute('width', approxW);
+    rect.setAttribute('height', approxH);
+    rect.setAttribute('rx', 4);
+    rect.setAttribute('fill', '#fffaf0');
+    rect.setAttribute('opacity', '0.88');
+    svg.appendChild(rect);
+    text(sx, sy, str, size, color, anchor, weight);
+  }
 
   // light grid
   for(let gx=Math.floor(minX/10)*10; gx<=maxX+10; gx+=10){
@@ -1040,7 +1057,17 @@ function renderHardMap(legs){
     line.setAttribute('stroke','#3a5c42'); line.setAttribute('stroke-width',3.5);
     line.setAttribute('marker-end','url(#arrowGreen2)');
     svg.appendChild(line);
-    text((x1+x2)/2, (y1+y2)/2 - 8, `${l.mag} m ${l.dir}`, 12, '#2e4a35');
+    // offset the label perpendicular to this leg's direction, alternating sides
+    // so consecutive same-axis legs (e.g. a corrective leg retracing ground) don't stack labels
+    const midX = (x1+x2)/2, midY = (y1+y2)/2;
+    const side = (i%2===0) ? -1 : 1;
+    let labelX = midX, labelY = midY;
+    if(l.dir === 'N' || l.dir === 'S'){
+      labelX = midX + side*30; // vertical leg → offset label horizontally
+    } else {
+      labelY = midY + side*16; // horizontal leg → offset label vertically
+    }
+    labelWithBg(labelX, labelY, `${l.mag} m ${l.dir}`, 12, '#2e4a35');
     cur = next;
   });
   state.trailGeomHard = { points: screenPoints, mags: legs.map(l=>l.mag) };
@@ -1053,8 +1080,8 @@ function renderHardMap(legs){
   startDot.setAttribute('stroke', '#241c14'); startDot.setAttribute('stroke-width', 1.5);
   svg.appendChild(startDot);
   text(toSX(s.x), toSY(s.y)+26, '🚩', 20, '#241c14');
-  text(toSX(s.x), toSY(s.y)+48, 'START', 15, '#3a5c42', 'middle', 800);
-  text(toSX(s.x), toSY(s.y)+65, state.name, 12.5, '#4a3f2f');
+  labelWithBg(toSX(s.x), toSY(s.y)+48, 'START', 15, '#3a5c42', 'middle', 800);
+  labelWithBg(toSX(s.x), toSY(s.y)+65, state.name, 12.5, '#4a3f2f');
 
   const endDot = document.createElementNS(ns,'circle');
   endDot.setAttribute('cx', toSX(e.x)); endDot.setAttribute('cy', toSY(e.y));
@@ -1062,7 +1089,7 @@ function renderHardMap(legs){
   endDot.setAttribute('stroke', '#241c14'); endDot.setAttribute('stroke-width', 1.5);
   svg.appendChild(endDot);
   text(toSX(e.x), toSY(e.y)-22, '🏁', 20, '#241c14');
-  text(toSX(e.x), toSY(e.y)-42, 'FINISH', 15, '#a8412a', 'middle', 800);
+  labelWithBg(toSX(e.x), toSY(e.y)-42, 'FINISH', 15, '#a8412a', 'middle', 800);
 
   svg.dataset.sx = toSX(s.x); svg.dataset.sy = toSY(s.y);
   svg.dataset.ex = toSX(e.x); svg.dataset.ey = toSY(e.y);
@@ -1266,17 +1293,14 @@ function checkRound(){
   fb.classList.remove('correct');
 
   if(state.attempts >= 4){
-    // full reveal — explain it and hand them the answer so they can move on
-    fb.classList.remove('wrong');
+    // explain it and show the answer, but they still must type it in
+    // correctly and pass the check to actually advance — no free skip
+    fb.classList.remove('correct');
     fb.classList.add('shown');
     const dispAnswerText = state.difficulty==='easy'
       ? `${state.answer.displacement} m`
       : (state.answer.direction==='NONE' ? '0 m (back at start)' : `${state.answer.displacement} m ${state.answer.direction}`);
-    fb.innerHTML = `<strong>Here's how it breaks down:</strong> Total distance is every meter walked, added up regardless of direction — that's <b>${state.answer.distance} m</b>. Displacement is the straight-line trip from start to finish — that's <b>${dispAnswerText}</b>. Take a look, then move on to the next round.`;
-    revealCrowLine();
-    el('btnSubmitRound').style.display = 'none';
-    el('btnNextRound').style.display = 'inline-block';
-    lockInputs(true);
+    fb.innerHTML = `<strong>Here's how it breaks down:</strong> Total distance is every meter walked, added up regardless of direction — that's <b>${state.answer.distance} m</b>. Displacement is the straight-line trip from start to finish — that's <b>${dispAnswerText}</b>. Enter those values above and check again to move on.`;
   } else if(state.attempts >= 2){
     fb.classList.add('wrong');
     const offParts = [];
